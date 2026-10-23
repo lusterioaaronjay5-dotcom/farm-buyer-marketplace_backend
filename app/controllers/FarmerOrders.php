@@ -4,6 +4,7 @@ defined('PREVENT_DIRECT_ACCESS') OR exit('No direct script access allowed');
 class FarmerOrders extends Controller {
 
 	private $statuses = ['pending', 'confirmed', 'preparing', 'out_for_delivery', 'completed', 'cancelled'];
+	private $deliveryStatuses = ['pending', 'preparing', 'out_for_delivery', 'delivered', 'cancelled'];
 
 	private function requireFarmer() {
 		$this->call->library('session');
@@ -24,6 +25,7 @@ class FarmerOrders extends Controller {
 		$this->call->model('Order', 'order');
 		$this->call->model('OrderItem', 'order_item');
 		$this->call->model('User', 'user');
+		$this->call->model('Delivery', 'delivery');
 	}
 
 	private function farmerHasOrder($order_id, $farmer_id) {
@@ -62,15 +64,19 @@ class FarmerOrders extends Controller {
 				continue;
 			}
 			$buyer = $this->user->_find((int) $order['buyer_id']);
+			$delivery = $this->delivery->_find_by('order_id', (int) $order_id);
+
 			$farmer_total = 0;
 			foreach ($entries as $e) {
 				$farmer_total += $e['subtotal'];
 			}
+
 			$rows[] = [
 				'order'        => $order,
 				'buyer'        => $buyer,
 				'entries'      => $entries,
 				'farmer_total' => $farmer_total,
+				'delivery'     => $delivery ?: null,
 			];
 		}
 
@@ -79,8 +85,9 @@ class FarmerOrders extends Controller {
 		});
 
 		$this->call->view('farmer_orders', [
-			'rows'     => $rows,
-			'statuses' => $this->statuses,
+			'rows'              => $rows,
+			'statuses'          => $this->statuses,
+			'deliveryStatuses'  => $this->deliveryStatuses,
 		]);
 	}
 
@@ -93,6 +100,32 @@ class FarmerOrders extends Controller {
 
 		if (in_array($status, $this->statuses, true) && $this->farmerHasOrder($order_id, $farmer_id)) {
 			$this->order->_update($order_id, ['status' => $status]);
+		}
+
+		header('Location: /farmer/orders');
+		exit;
+	}
+
+	public function updateDeliveryStatus() {
+		$farmer_id = $this->requireFarmer();
+		$this->loadModels();
+
+		$order_id = (int) $this->io->post('order_id');
+		$status   = (string) $this->io->post('delivery_status');
+
+		if (in_array($status, $this->deliveryStatuses, true) && $this->farmerHasOrder($order_id, $farmer_id)) {
+			$existing = $this->delivery->_find_by('order_id', $order_id);
+
+			if (!empty($existing)) {
+				$this->delivery->_update_where(['order_id' => $order_id], ['delivery_status' => $status]);
+			} else {
+				$order = $this->order->_find($order_id);
+				$this->delivery->_insert([
+					'order_id'         => $order_id,
+					'delivery_address' => $order['delivery_address'] ?? '',
+					'delivery_status'  => $status,
+				]);
+			}
 		}
 
 		header('Location: /farmer/orders');
