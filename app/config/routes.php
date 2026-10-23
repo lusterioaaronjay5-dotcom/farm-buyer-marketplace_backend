@@ -46,3 +46,8 @@ defined('PREVENT_DIRECT_ACCESS') OR exit('No direct script access allowed');
 
 $router->get('/', 'Welcome::index');
 $router->get('/marketplace', 'Marketplace::index');
+$router->get('/login', 'Auth::loginForm');
+$router->post('/login', 'Auth::loginSubmit');
+$router->get('/register', 'Auth::registerForm');
+$router->post('/register', 'Auth::registerSubmit');
+$router->get('/logout', 'Auth::logout');
