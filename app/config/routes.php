@@ -51,3 +51,4 @@ $router->post('/login', 'Auth::loginSubmit');
 $router->get('/register', 'Auth::registerForm');
 $router->post('/register', 'Auth::registerSubmit');
 $router->get('/logout', 'Auth::logout');
+$router->get('/dashboard', 'Dashboard::index');

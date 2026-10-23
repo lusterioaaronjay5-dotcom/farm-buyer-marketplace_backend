@@ -21,7 +21,7 @@ class Auth extends Controller {
 			$this->session->set_userdata('user_id', $user['user_id']);
 			$this->session->set_userdata('role', $user['role']);
 			$this->session->set_userdata('full_name', $user['full_name']);
-			header('Location: /marketplace');
+			header('Location: /dashboard');
 			exit;
 		}
 
