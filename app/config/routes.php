@@ -75,3 +75,8 @@ $router->post('/api/login', 'ApiAuth::login');
 $router->get('/api/me', 'ApiAuth::me');
 $router->get('/api/products', 'ApiProducts::index');
 $router->get('/api/products/detail', 'ApiProducts::show');
+$router->post('/api/register', 'ApiAuth::register');
+$router->get('/api/farmer/products', 'ApiFarmerProducts::index');
+$router->post('/api/farmer/products', 'ApiFarmerProducts::store');
+$router->post('/api/farmer/products/update', 'ApiFarmerProducts::update');
+$router->post('/api/farmer/products/delete', 'ApiFarmerProducts::destroy');

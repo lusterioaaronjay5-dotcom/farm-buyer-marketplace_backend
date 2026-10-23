@@ -120,8 +120,11 @@ $config['refresh_token_key'] = getenv('REFRESH_TOKEN_KEY') ?: '';
 | Set to FALSE only if your users are not stored in the table below and
 | you perform your own server-side authorization checks.
 |
+| Set to FALSE for this project because the users table uses "user_id"
+| instead of "id", and the role check is done in our own controllers.
+|
 */
-$config['jwt_verify_user'] = TRUE;
+$config['jwt_verify_user'] = FALSE;
 
 /*
 |--------------------------------------------------------------------------
