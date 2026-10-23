@@ -71,3 +71,7 @@ $router->get('/product', 'ProductDetails::index');
 $router->post('/farmer/deliveries/status', 'FarmerOrders::updateDeliveryStatus');
 $router->get('/buyer/pay', 'EWallet::index');
 $router->post('/buyer/pay/confirm', 'EWallet::confirm');
+$router->post('/api/login', 'ApiAuth::login');
+$router->get('/api/me', 'ApiAuth::me');
+$router->get('/api/products', 'ApiProducts::index');
+$router->get('/api/products/detail', 'ApiProducts::show');
