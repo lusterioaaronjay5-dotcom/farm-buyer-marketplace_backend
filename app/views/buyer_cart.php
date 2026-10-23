@@ -43,7 +43,7 @@
 	</table>
 
 	<h3>Total: ₱<?= number_format($total, 2) ?></h3>
-	<p><button disabled>Proceed to Checkout (next step)</button></p>
+	<p><a href="/buyer/checkout"><button type="button">Proceed to Checkout</button></a></p>
 	<?php endif; ?>
 </body>
 </html>

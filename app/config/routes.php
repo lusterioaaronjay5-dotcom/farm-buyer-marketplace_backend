@@ -62,3 +62,5 @@ $router->get('/buyer/cart', 'BuyerCart::index');
 $router->post('/buyer/cart/add', 'BuyerCart::add');
 $router->post('/buyer/cart/update', 'BuyerCart::update');
 $router->post('/buyer/cart/remove', 'BuyerCart::remove');
+$router->get('/buyer/checkout', 'Checkout::index');
+$router->post('/buyer/checkout', 'Checkout::place');
