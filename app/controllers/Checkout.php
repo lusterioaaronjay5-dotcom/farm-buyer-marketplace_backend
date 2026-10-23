@@ -51,11 +51,11 @@ class Checkout extends Controller {
 		}
 
 		$this->call->view('checkout', [
-			'items'      => $items,
-			'total'      => $total,
-			'error'      => null,
-			'old'        => [],
-			'order_id'   => null,
+			'items'    => $items,
+			'total'    => $total,
+			'error'    => null,
+			'old'      => [],
+			'order_id' => null,
 		]);
 	}
 
@@ -70,12 +70,26 @@ class Checkout extends Controller {
 
 		$address = trim((string) $this->io->post('delivery_address'));
 		$method  = (string) $this->io->post('payment_method');
-		$old     = ['delivery_address' => $address, 'payment_method' => $method];
+
+		$lat = $this->io->post('latitude');
+		$lng = $this->io->post('longitude');
+		$lat = ($lat === null || $lat === '') ? null : (float) $lat;
+		$lng = ($lng === null || $lng === '') ? null : (float) $lng;
+
+		$old = [
+			'delivery_address' => $address,
+			'payment_method'   => $method,
+			'latitude'         => $lat,
+			'longitude'        => $lng,
+		];
 
 		$fail = function ($message) use ($items, $total, $old) {
 			$this->call->view('checkout', [
-				'items' => $items, 'total' => $total,
-				'error' => $message, 'old' => $old, 'order_id' => null,
+				'items'    => $items,
+				'total'    => $total,
+				'error'    => $message,
+				'old'      => $old,
+				'order_id' => null,
 			]);
 			exit;
 		};
@@ -139,6 +153,8 @@ class Checkout extends Controller {
 				'order_id'         => $order_id,
 				'delivery_address' => $address,
 				'delivery_status'  => 'pending',
+				'latitude'         => $lat,
+				'longitude'        => $lng,
 			]);
 
 			$this->order->_commit();
@@ -150,8 +166,11 @@ class Checkout extends Controller {
 		$this->session->set_userdata('cart', []);
 
 		$this->call->view('checkout', [
-			'items' => [], 'total' => 0,
-			'error' => null, 'old' => [], 'order_id' => $order_id,
+			'items'    => [],
+			'total'    => 0,
+			'error'    => null,
+			'old'      => [],
+			'order_id' => $order_id,
 		]);
 	}
 }
