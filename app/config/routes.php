@@ -58,3 +58,7 @@ $router->post('/farmer/products/add', 'FarmerProducts::addSubmit');
 $router->get('/farmer/products/edit', 'FarmerProducts::editForm');
 $router->post('/farmer/products/edit', 'FarmerProducts::editSubmit');
 $router->post('/farmer/products/delete', 'FarmerProducts::delete');
+$router->get('/buyer/cart', 'BuyerCart::index');
+$router->post('/buyer/cart/add', 'BuyerCart::add');
+$router->post('/buyer/cart/update', 'BuyerCart::update');
+$router->post('/buyer/cart/remove', 'BuyerCart::remove');
