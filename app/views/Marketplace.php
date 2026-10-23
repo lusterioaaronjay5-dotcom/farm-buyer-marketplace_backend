@@ -27,7 +27,7 @@
 		</tr>
 		<?php foreach ($products as $p): ?>
 		<tr>
-			<td><?= htmlspecialchars($p['product_name']) ?></td>
+			<td><a href="/product?id=<?= (int) $p['product_id'] ?>"><?= htmlspecialchars($p['product_name']) ?></a></td>
 			<td><?= htmlspecialchars($p['category']) ?></td>
 			<td>₱<?= htmlspecialchars($p['price']) ?></td>
 			<td><?= htmlspecialchars($p['quantity_available']) ?></td>

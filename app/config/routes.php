@@ -67,3 +67,4 @@ $router->post('/buyer/checkout', 'Checkout::place');
 $router->get('/buyer/orders', 'BuyerOrders::index');
 $router->get('/farmer/orders', 'FarmerOrders::index');
 $router->post('/farmer/orders/status', 'FarmerOrders::updateStatus');
+$router->get('/product', 'ProductDetails::index');
