@@ -144,9 +144,9 @@ class Checkout extends Controller {
 				'order_id'              => $order_id,
 				'amount'                => $total,
 				'payment_method'        => $method,
-				'payment_status'        => 'paid',
-				'transaction_reference' => 'TEST-' . strtoupper(bin2hex(random_bytes(6))),
-				'paid_at'               => date('Y-m-d H:i:s'),
+				'payment_status'        => 'pending',
+				'transaction_reference' => 'SIM-' . strtoupper(bin2hex(random_bytes(6))),
+				'paid_at'               => null,
 			]);
 
 			$this->delivery->_insert([
@@ -165,13 +165,8 @@ class Checkout extends Controller {
 
 		$this->session->set_userdata('cart', []);
 
-		$this->call->view('checkout', [
-			'items'    => [],
-			'total'    => 0,
-			'error'    => null,
-			'old'      => [],
-			'order_id' => $order_id,
-		]);
+		header('Location: /buyer/pay?order_id=' . (int) $order_id);
+		exit;
 	}
 }
 ?>

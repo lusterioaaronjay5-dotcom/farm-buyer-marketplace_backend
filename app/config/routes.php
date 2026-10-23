@@ -69,3 +69,5 @@ $router->get('/farmer/orders', 'FarmerOrders::index');
 $router->post('/farmer/orders/status', 'FarmerOrders::updateStatus');
 $router->get('/product', 'ProductDetails::index');
 $router->post('/farmer/deliveries/status', 'FarmerOrders::updateDeliveryStatus');
+$router->get('/buyer/pay', 'EWallet::index');
+$router->post('/buyer/pay/confirm', 'EWallet::confirm');
