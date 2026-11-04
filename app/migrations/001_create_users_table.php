@@ -18,57 +18,58 @@ class Create_users_table {
 
         $this->_lava->dbforge
             ->add_field([
-                'id' => [
+                'user_id' => [
                     'type'           => 'INT',
                     'constraint'     => 11,
                     'unsigned'       => TRUE,
                     'auto_increment' => TRUE,
                     'null'           => FALSE,
                 ],
-                'username' => [
+                'full_name' => [
                     'type'       => 'VARCHAR',
-                    'constraint' => 100,
+                    'constraint' => 150,
                     'null'       => FALSE,
                 ],
                 'email' => [
                     'type'       => 'VARCHAR',
                     'constraint' => 255,
                     'null'       => FALSE,
-                    'unique'     => TRUE,
                 ],
-                'password' => [
+                'password_hash' => [
                     'type'       => 'VARCHAR',
                     'constraint' => 255,
                     'null'       => FALSE,
                 ],
                 'role' => [
                     'type'       => 'ENUM',
-                    'constraint' => "'admin','moderator','user'",
+                    'constraint' => "'farmer','buyer','admin'",
                     'null'       => FALSE,
-                    'default'    => 'user',
+                    'default'    => 'buyer',
                 ],
-                'is_active' => [
-                    'type'       => 'TINYINT',
-                    'constraint' => 1,
-                    'unsigned'   => TRUE,
-                    'null'       => FALSE,
-                    'default'    => 1,
+                'phone' => [
+                    'type'       => 'VARCHAR',
+                    'constraint' => 30,
+                    'null'       => TRUE,
+                    'default'    => NULL,
+                ],
+                'address' => [
+                    'type'       => 'VARCHAR',
+                    'constraint' => 500,
+                    'null'       => TRUE,
+                    'default'    => NULL,
                 ],
                 'created_at' => [
-                    'type'    => 'DATETIME',
-                    'null'    => FALSE,
+                    'type'    => 'TIMESTAMP',
+                    'null'    => TRUE,
                     'default' => 'CURRENT_TIMESTAMP',
                 ],
-                'updated_at' => [
-                    'type'    => 'DATETIME',
-                    'null'    => TRUE,
-                    'default' => NULL,
+                'profile_picture' => [
+                    'type' => 'MEDIUMTEXT',
+                    'null' => TRUE,
                 ],
             ])
-            ->add_key('id', primary: TRUE)
-            ->add_key('username', unique: TRUE, name: 'username_unique')
-            ->add_key('email', name: 'email_idx')
-            ->add_key('role', name: 'role_idx')
+            ->add_key('user_id', primary: TRUE)
+            ->add_key('email', unique: TRUE, name: 'email')
             ->create_table('users');
     }
 

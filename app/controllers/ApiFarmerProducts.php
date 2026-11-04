@@ -7,56 +7,9 @@ class ApiFarmerProducts extends Controller
         parent::__construct();
         $this->call->library('api');
         $this->call->database();
+        $this->call->helper('api');
+        $this->call->helper('farmer');
         $this->call->model('Product', 'product');
-    }
-
-    /**
-     * Ginagawang array ang anumang hugis ng decoded token (array, object, string, o nakabalot sa "data").
-     */
-    private function toArray($value)
-    {
-        if (is_string($value)) {
-            $value = json_decode($value, true);
-        }
-        if (is_object($value)) {
-            $value = (array) $value;
-        }
-        if (is_array($value) && isset($value['data']) && (is_array($value['data']) || is_object($value['data']))) {
-            $value = (array) $value['data'];
-        }
-
-        return is_array($value) ? $value : [];
-    }
-
-    /**
-     * Sinisiguro na may valid token at farmer ang nag-request. Ibinabalik ang user_id.
-     */
-    private function requireFarmer()
-    {
-        $token = $this->api->get_bearer_token();
-        if (!$token) {
-            $this->api->respond_error('Missing token.', 401);
-        }
-
-        try {
-            $decoded = $this->api->validate_jwt($token);
-        } catch (\Throwable $e) {
-            $this->api->respond_error('Token error: ' . $e->getMessage(), 401);
-        }
-
-        $payload = $this->toArray($decoded);
-        if (empty($payload['user_id'])) {
-            $this->api->respond_error(
-                'Invalid or expired token. validate_jwt returned: ' . gettype($decoded),
-                401
-            );
-        }
-
-        if (($payload['role'] ?? '') !== 'farmer') {
-            $this->api->respond_error('Farmers lang ang puwedeng gumawa nito.', 403);
-        }
-
-        return (int) $payload['user_id'];
     }
 
     private function formatProduct(array $p)
@@ -167,7 +120,7 @@ class ApiFarmerProducts extends Controller
     public function index()
     {
         $this->api->require_method('GET');
-        $farmerId = $this->requireFarmer();
+        $farmerId = farmer_require_farmer($this->api);
 
         $rows = $this->product->_find_all_by('farmer_id', $farmerId) ?: [];
         $products = array_map(fn ($r) => $this->formatProduct((array) $r), $rows);
@@ -181,7 +134,7 @@ class ApiFarmerProducts extends Controller
     public function store()
     {
         $this->api->require_method('POST');
-        $farmerId = $this->requireFarmer();
+        $farmerId = farmer_require_farmer($this->api);
         $body = $this->api->body();
 
         $result = $this->validateInput($body);
@@ -208,7 +161,7 @@ class ApiFarmerProducts extends Controller
     public function update()
     {
         $this->api->require_method('POST');
-        $farmerId = $this->requireFarmer();
+        $farmerId = farmer_require_farmer($this->api);
         $body = $this->api->body();
 
         $productId = (int) ($body['product_id'] ?? 0);
@@ -239,7 +192,7 @@ class ApiFarmerProducts extends Controller
     public function destroy()
     {
         $this->api->require_method('POST');
-        $farmerId = $this->requireFarmer();
+        $farmerId = farmer_require_farmer($this->api);
         $body = $this->api->body();
 
         $productId = (int) ($body['product_id'] ?? 0);

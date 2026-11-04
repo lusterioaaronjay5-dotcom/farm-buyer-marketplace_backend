@@ -7,25 +7,8 @@ class ApiAuth extends Controller
         parent::__construct();
         $this->call->library('api');
         $this->call->database();
+        $this->call->helper('api');
         $this->call->model('User', 'user');
-    }
-
-    /**
-     * Ginagawang array ang anumang hugis ng decoded token (array, object, string, o nakabalot sa "data").
-     */
-    private function toArray($value)
-    {
-        if (is_string($value)) {
-            $value = json_decode($value, true);
-        }
-        if (is_object($value)) {
-            $value = (array) $value;
-        }
-        if (is_array($value) && isset($value['data']) && (is_array($value['data']) || is_object($value['data']))) {
-            $value = (array) $value['data'];
-        }
-
-        return is_array($value) ? $value : [];
     }
 
     /**
@@ -33,24 +16,7 @@ class ApiAuth extends Controller
      */
     private function requireToken()
     {
-        $token = $this->api->get_bearer_token();
-        if (!$token) {
-            $this->api->respond_error('Missing token.', 401);
-        }
-
-        try {
-            $decoded = $this->api->validate_jwt($token);
-        } catch (\Throwable $e) {
-            $this->api->respond_error('Token error: ' . $e->getMessage(), 401);
-        }
-
-        $payload = $this->toArray($decoded);
-        if (empty($payload['user_id'])) {
-            $this->api->respond_error(
-                'Invalid or expired token. validate_jwt returned: ' . gettype($decoded),
-                401
-            );
-        }
+        $payload = api_decode_token($this->api);
 
         $user = $this->user->_find((int) $payload['user_id']);
         if (!$user) {

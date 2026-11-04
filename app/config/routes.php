@@ -44,39 +44,46 @@ defined('PREVENT_DIRECT_ACCESS') OR exit('No direct script access allowed');
 */
 /** @var object $router **/
 
-$router->get('/', 'Welcome::index');
-$router->get('/marketplace', 'Marketplace::index');
-$router->get('/login', 'Auth::loginForm');
-$router->post('/login', 'Auth::loginSubmit');
-$router->get('/register', 'Auth::registerForm');
-$router->post('/register', 'Auth::registerSubmit');
-$router->get('/logout', 'Auth::logout');
-$router->get('/dashboard', 'Dashboard::index');
-$router->get('/farmer/products', 'FarmerProducts::index');
-$router->get('/farmer/products/add', 'FarmerProducts::addForm');
-$router->post('/farmer/products/add', 'FarmerProducts::addSubmit');
-$router->get('/farmer/products/edit', 'FarmerProducts::editForm');
-$router->post('/farmer/products/edit', 'FarmerProducts::editSubmit');
-$router->post('/farmer/products/delete', 'FarmerProducts::delete');
-$router->get('/buyer/cart', 'BuyerCart::index');
-$router->post('/buyer/cart/add', 'BuyerCart::add');
-$router->post('/buyer/cart/update', 'BuyerCart::update');
-$router->post('/buyer/cart/remove', 'BuyerCart::remove');
-$router->get('/buyer/checkout', 'Checkout::index');
-$router->post('/buyer/checkout', 'Checkout::place');
-$router->get('/buyer/orders', 'BuyerOrders::index');
-$router->get('/farmer/orders', 'FarmerOrders::index');
-$router->post('/farmer/orders/status', 'FarmerOrders::updateStatus');
-$router->get('/product', 'ProductDetails::index');
-$router->post('/farmer/deliveries/status', 'FarmerOrders::updateDeliveryStatus');
-$router->get('/buyer/pay', 'EWallet::index');
-$router->post('/buyer/pay/confirm', 'EWallet::confirm');
+// Auth
 $router->post('/api/login', 'ApiAuth::login');
 $router->get('/api/me', 'ApiAuth::me');
+$router->post('/api/register', 'ApiAuth::register');
+
+// Products (buyer)
 $router->get('/api/products', 'ApiProducts::index');
 $router->get('/api/products/detail', 'ApiProducts::show');
-$router->post('/api/register', 'ApiAuth::register');
+
+// Products (farmer)
 $router->get('/api/farmer/products', 'ApiFarmerProducts::index');
 $router->post('/api/farmer/products', 'ApiFarmerProducts::store');
 $router->post('/api/farmer/products/update', 'ApiFarmerProducts::update');
 $router->post('/api/farmer/products/delete', 'ApiFarmerProducts::destroy');
+
+// Orders (farmer)
+$router->get('/api/farmer/orders', 'ApiFarmerOrders::index');
+$router->post('/api/farmer/orders/status', 'ApiFarmerOrders::updateStatus');
+
+// Dashboard (farmer)
+$router->get('/api/farmer/dashboard', 'ApiFarmerDashboard::index');
+
+// Orders (buyer)
+$router->post('/api/orders', 'ApiOrders::store');
+$router->get('/api/orders', 'ApiOrders::index');
+$router->post('/api/orders/pay', 'ApiOrders::pay');
+$router->post('/api/orders/cancel', 'ApiOrders::cancel');
+$router->get('/api/geocode', 'ApiOrders::geocode');
+
+// Profile
+$router->get('/api/profile', 'ApiProfile::show');
+$router->post('/api/profile', 'ApiProfile::update');
+
+// Farmer profile (buyer view)
+$router->get('/api/farmers/detail', 'ApiFarmers::show');
+
+// Messages (buyer at farmer)
+$router->get('/api/messages/inbox', 'ApiMessages::inbox');
+$router->get('/api/messages/thread', 'ApiMessages::thread');
+$router->post('/api/messages', 'ApiMessages::send');
+$router->delete('/api/messages', 'ApiMessages::destroy');
+
+$router->get('/api/farmer/sales-summary', 'ApiFarmerSales::summary');
