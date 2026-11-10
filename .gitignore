@@ -25,3 +25,4 @@ runtime/*
 # OS
 Thumbs.db
 .env.aiven-backup
+.env
