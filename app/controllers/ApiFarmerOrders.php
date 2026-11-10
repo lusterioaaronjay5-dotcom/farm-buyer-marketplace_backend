@@ -22,6 +22,61 @@ class ApiFarmerOrders extends Controller
     }
 
     /**
+     * Kinukuha ang lat/lng ng address gamit ang OpenStreetMap Nominatim.
+     * Ibinabalik ang [null, null] kung hindi mahanap.
+     */
+    private function geocodeAddress($address)
+    {
+        $address = trim((string) $address);
+        if ($address === '') {
+            return [null, null];
+        }
+
+        $url = 'https://nominatim.openstreetmap.org/search?' . http_build_query([
+            'q'            => $address . ', Philippines',
+            'format'       => 'json',
+            'limit'        => 1,
+            'countrycodes' => 'ph',
+        ]);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_USERAGENT      => 'FarmConnect/1.0 (capstone project)',
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+        ]);
+        $response = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false || $status !== 200) {
+            return [null, null];
+        }
+
+        $data = json_decode($response, true);
+        if (empty($data[0]['lat']) || empty($data[0]['lon'])) {
+            return [null, null];
+        }
+
+        return [
+            round((float) $data[0]['lat'], 7),
+            round((float) $data[0]['lon'], 7),
+        ];
+    }
+
+    /**
+     * Address ng farmer na naka-geocode, para sa panimulang punto ng rider.
+     */
+    private function farmerOrigin($farmerId)
+    {
+        $rows = $this->db->table('users')->where('user_id', $farmerId)->get_all() ?: [];
+        $me = !empty($rows) ? (array) $rows[0] : [];
+
+        return $this->geocodeAddress($me['address'] ?? '');
+    }
+
+    /**
      * Lahat ng produkto ng farmer, keyed by product_id. (1 query)
      */
     private function farmerProducts($farmerId)
@@ -85,10 +140,13 @@ class ApiFarmerOrders extends Controller
                 'paid_at'   => $payment['paid_at'] ?? null,
             ] : null,
             'delivery'    => $delivery ? [
-                'status'    => $delivery['delivery_status'],
-                'address'   => $delivery['delivery_address'] ?? null,
-                'latitude'  => $delivery['latitude'] ?? null,
-                'longitude' => $delivery['longitude'] ?? null,
+                'status'           => $delivery['delivery_status'],
+                'address'          => $delivery['delivery_address'] ?? null,
+                'latitude'         => $delivery['latitude'] ?? null,
+                'longitude'        => $delivery['longitude'] ?? null,
+                'dispatched_at'    => isset($delivery['dispatched_at']) ? (int) $delivery['dispatched_at'] : null,
+                'origin_latitude'  => $delivery['origin_latitude'] ?? null,
+                'origin_longitude' => $delivery['origin_longitude'] ?? null,
             ] : null,
             'next_status' => self::NEXT_STATUS[$order['status']] ?? null,
         ];
@@ -151,6 +209,7 @@ class ApiFarmerOrders extends Controller
     /**
      * POST /api/farmer/orders/status
      * Body: order_id, status (dapat ang susunod na status lang)
+     * Kapag out_for_delivery, itatala ang oras ng pag-alis at lokasyon ng farmer.
      */
     public function updateStatus()
     {
@@ -201,7 +260,17 @@ class ApiFarmerOrders extends Controller
         $deliveryRows = $this->delivery->_find_all_by('order_id', $orderId) ?: [];
         if (!empty($deliveryRows)) {
             $delivery = (array) $deliveryRows[0];
-            $this->delivery->_update((int) $delivery['delivery_id'], ['delivery_status' => $deliveryStatus]);
+            $update = ['delivery_status' => $deliveryStatus];
+
+            // Kapag ipinadala na, itatala ang oras ng pag-alis at ang lokasyon ng farmer
+            if ($newStatus === 'out_for_delivery') {
+                [$originLat, $originLng] = $this->farmerOrigin($farmerId);
+                $update['dispatched_at']    = time();
+                $update['origin_latitude']  = $originLat;
+                $update['origin_longitude'] = $originLng;
+            }
+
+            $this->delivery->_update((int) $delivery['delivery_id'], $update);
         }
 
         $this->api->respond([

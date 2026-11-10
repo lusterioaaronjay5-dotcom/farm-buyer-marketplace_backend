@@ -38,14 +38,24 @@ class ApiFarmerDashboard extends Controller
         $totalListings = count($products);
         $available = 0;
         $lowStock = [];
+        $stockBreakdown = [];
 
         foreach ($products as $p) {
+            $qty = (int) $p['quantity_available'];
+
+            // Lahat ng produkto, kasama ang ubos na, para sa donut chart
+            $stockBreakdown[] = [
+                'product_id'         => (int) $p['product_id'],
+                'product_name'       => $p['product_name'],
+                'unit'               => $p['unit'],
+                'quantity_available' => $qty,
+            ];
+
             if (($p['availability'] ?? '') !== 'available') {
                 continue;
             }
             $available++;
 
-            $qty = (int) $p['quantity_available'];
             if ($qty <= self::LOW_STOCK_LIMIT) {
                 $lowStock[] = [
                     'product_id'         => (int) $p['product_id'],
@@ -58,6 +68,8 @@ class ApiFarmerDashboard extends Controller
 
         usort($lowStock, fn ($a, $b) => $a['quantity_available'] <=> $b['quantity_available']);
         $lowStock = array_slice($lowStock, 0, 5);
+
+        usort($stockBreakdown, fn ($a, $b) => $b['quantity_available'] <=> $a['quantity_available']);
 
         // 2. Items ng lahat ng produkto ng farmer (1 query)
         $itemRows = farmer_fetch_in($this->db, 'order_items', 'product_id', array_keys($products));
@@ -122,8 +134,9 @@ class ApiFarmerDashboard extends Controller
                 'completed_orders' => $completedOrders,
                 'total_sales'      => round($totalSales, 2),
             ],
-            'recent_orders' => array_slice($orders, 0, 5),
-            'low_stock'     => $lowStock,
+            'recent_orders'   => array_slice($orders, 0, 5),
+            'low_stock'       => $lowStock,
+            'stock_breakdown' => $stockBreakdown,
         ]);
     }
 }
