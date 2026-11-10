@@ -151,4 +151,95 @@ class ApiAuth extends Controller
 
         $this->api->respond(['user' => $user]);
     }
+
+    /**
+     * I-verify ang Google ID token sa server ng Google.
+     * Nangangailangan ng gumaganang CA bundle sa PHP cURL (tingnan ang setup sa ibaba).
+     */
+    private function verifyGoogleIdToken($idToken)
+    {
+        $url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($idToken);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+
+        $raw    = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        if ($raw === false) {
+            error_log('Google tokeninfo cURL error: ' . curl_error($ch));
+        }
+        curl_close($ch);
+
+        if ($raw === false || $status !== 200) {
+            return null;
+        }
+
+        $data = json_decode($raw, true);
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * POST /api/auth/google
+     * Body: credential (Google ID token galing sa Google Sign-In button)
+     *
+     * Kapag bago ang Gmail, awtomatikong gumagawa ng buyer account.
+     * Kapag may existing na account na may parehong email, doon mag-login.
+     */
+    public function google()
+    {
+        $this->api->require_method('POST');
+        $body = $this->api->body();
+
+        $credential = trim($body['credential'] ?? '');
+        if ($credential === '') {
+            $this->api->respond_error('Walang Google credential.', 422);
+        }
+
+        $clientId = getenv('GOOGLE_CLIENT_ID') ?: '';
+        if ($clientId === '') {
+            $this->api->respond_error('Hindi pa naka-configure ang Google sign-in.', 500);
+        }
+
+        $info = $this->verifyGoogleIdToken($credential);
+        if (
+            !$info
+            || ($info['aud'] ?? '') !== $clientId
+            || !in_array($info['iss'] ?? '', ['accounts.google.com', 'https://accounts.google.com'], true)
+            || (int) ($info['exp'] ?? 0) <= time()
+            || !filter_var($info['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            || empty($info['email'])
+        ) {
+            $this->api->respond_error('Hindi valid ang Google sign-in. Subukang muli.', 401);
+        }
+
+        $email    = strtolower(trim($info['email']));
+        $fullName = trim($info['name'] ?? '') ?: $email;
+
+        $user = $this->user->_find_by('email', $email);
+
+        if (!$user) {
+            // Bagong Gmail: gumawa ng account. Random na password hash dahil hindi ito gagamitin sa password login.
+            $id = $this->user->_insert([
+                'full_name'     => $fullName,
+                'email'         => $email,
+                'password_hash' => password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT),
+                'role'          => 'buyer',
+                'phone'         => null,
+                'address'       => null,
+            ]);
+            $user = (array) $this->user->_find($id);
+        } else {
+            $user = (array) $user;
+        }
+
+        $this->api->respond([
+            'token' => $this->issueToken($user),
+            'user'  => $this->publicUser($user),
+        ]);
+    }
 }

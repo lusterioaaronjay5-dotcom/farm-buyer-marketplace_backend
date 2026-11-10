@@ -46,6 +46,7 @@ defined('PREVENT_DIRECT_ACCESS') OR exit('No direct script access allowed');
 
 // Auth
 $router->post('/api/login', 'ApiAuth::login');
+$router->post('/api/auth/google', 'ApiAuth::google');
 $router->get('/api/me', 'ApiAuth::me');
 $router->post('/api/register', 'ApiAuth::register');
 
