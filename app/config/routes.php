@@ -70,7 +70,6 @@ $router->get('/api/farmer/dashboard', 'ApiFarmerDashboard::index');
 // Orders (buyer)
 $router->post('/api/orders', 'ApiOrders::store');
 $router->get('/api/orders', 'ApiOrders::index');
-$router->post('/api/orders/pay', 'ApiOrders::pay');
 $router->post('/api/orders/cancel', 'ApiOrders::cancel');
 $router->get('/api/geocode', 'ApiOrders::geocode');
 
@@ -88,3 +87,23 @@ $router->post('/api/messages', 'ApiMessages::send');
 $router->delete('/api/messages', 'ApiMessages::destroy');
 
 $router->get('/api/farmer/sales-summary', 'ApiFarmerSales::summary');
+
+// Admin
+$router->get('/api/admin/users', 'ApiAdmin::users');
+$router->post('/api/admin/user-role', 'ApiAdmin::user_role');
+$router->get('/api/admin/products', 'ApiAdmin::products');
+$router->post('/api/admin/product-availability', 'ApiAdmin::product_availability');
+
+// Reviews
+$router->post('/api/reviews', 'ApiReviews::store');
+$router->get('/api/reviews/order', 'ApiReviews::order_reviews');
+$router->get('/api/reviews/product', 'ApiReviews::product_reviews');
+
+// Reports
+$router->get('/api/reports/admin', 'ApiReports::admin');
+$router->get('/api/reports/farmer', 'ApiReports::farmer');
+$router->get('/api/reports/buyer', 'ApiReports::buyer');
+
+// Xendit payments
+$router->post('/api/orders/xendit-checkout', 'ApiPayments::xendit_checkout');
+$router->post('/api/payments/xendit/webhook', 'ApiPayments::xendit_webhook');

@@ -154,7 +154,7 @@ class ApiAuth extends Controller
 
     /**
      * I-verify ang Google ID token sa server ng Google.
-     * Nangangailangan ng gumaganang CA bundle sa PHP cURL (tingnan ang setup sa ibaba).
+     * Nangangailangan ng gumaganang CA bundle sa PHP cURL.
      */
     private function verifyGoogleIdToken($idToken)
     {
@@ -185,10 +185,11 @@ class ApiAuth extends Controller
 
     /**
      * POST /api/auth/google
-     * Body: credential (Google ID token galing sa Google Sign-In button)
+     * Body: credential (Google ID token), role (buyer|farmer, kapag bago ang Gmail)
      *
-     * Kapag bago ang Gmail, awtomatikong gumagawa ng buyer account.
-     * Kapag may existing na account na may parehong email, doon mag-login.
+     * - Kung may account na ang email: login agad.
+     * - Kung bago ang email at walang role: ibabalik ang needs_role para pumili ang user.
+     * - Kung bago ang email at may role: gagawa ng account at mag-lo-login.
      */
     public function google()
     {
@@ -196,6 +197,8 @@ class ApiAuth extends Controller
         $body = $this->api->body();
 
         $credential = trim($body['credential'] ?? '');
+        $role       = trim($body['role'] ?? '');
+
         if ($credential === '') {
             $this->api->respond_error('Walang Google credential.', 422);
         }
@@ -222,19 +225,28 @@ class ApiAuth extends Controller
 
         $user = $this->user->_find_by('email', $email);
 
-        if (!$user) {
-            // Bagong Gmail: gumawa ng account. Random na password hash dahil hindi ito gagamitin sa password login.
+        if ($user) {
+            $user = (array) $user;
+        } else {
+            // Bagong Gmail: kailangan pang pumili ng role bago gumawa ng account
+            if (!in_array($role, ['farmer', 'buyer'], true)) {
+                $this->api->respond([
+                    'needs_role' => true,
+                    'name'       => $fullName,
+                ]);
+                return;
+            }
+
+            // Random na password hash dahil hindi ito gagamitin sa password login
             $id = $this->user->_insert([
                 'full_name'     => $fullName,
                 'email'         => $email,
                 'password_hash' => password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT),
-                'role'          => 'buyer',
+                'role'          => $role,
                 'phone'         => null,
                 'address'       => null,
             ]);
             $user = (array) $this->user->_find($id);
-        } else {
-            $user = (array) $user;
         }
 
         $this->api->respond([

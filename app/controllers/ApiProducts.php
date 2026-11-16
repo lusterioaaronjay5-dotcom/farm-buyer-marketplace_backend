@@ -25,6 +25,7 @@ class ApiProducts extends Controller {
             'quantity_available' => (int) $p['quantity_available'],
             'availability'       => $p['availability'],
             'location'           => $p['location'] ?? '',
+            'image_path'         => $p['image_path'] ?? '',
             'farmer_id'          => (int) $p['farmer_id'],
             'farmer_name'        => $farmer_name,
         ];

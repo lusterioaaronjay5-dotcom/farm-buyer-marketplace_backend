@@ -95,13 +95,24 @@ class ApiFarmerOrders extends Controller
     /**
      * Binubuo ang isang order mula sa mga naka-prefetch nang data. Walang query dito.
      * Gumagamit ng unit_price na itinala noong nag-checkout, hindi ng kasalukuyang presyo.
+     * Kasama na ang rating at feedback ng buyer para sa bawat produkto, kung meron.
      */
-    private function formatOrder(array $order, array $items, array $products, array $buyers, array $payments, array $deliveries)
+    private function formatOrder(array $order, array $items, array $products, array $buyers, array $payments, array $deliveries, array $reviewsByOrder = [])
     {
         $orderId  = (int) $order['order_id'];
         $buyer    = $buyers[(int) $order['buyer_id']] ?? [];
         $payment  = $payments[$orderId] ?? null;
         $delivery = $deliveries[$orderId] ?? null;
+
+        // Rating kada produkto sa order na ito
+        $reviewMap = [];
+        foreach ($reviewsByOrder[$orderId] ?? [] as $review) {
+            $r = (array) $review;
+            $reviewMap[(int) $r['product_id']] = [
+                'rating'  => (int) $r['rating'],
+                'comment' => $r['comment'] ?? null,
+            ];
+        }
 
         $lines    = [];
         $subtotal = 0;
@@ -120,26 +131,29 @@ class ApiFarmerOrders extends Controller
                 'quantity'     => $qty,
                 'price'        => $price,
                 'line_total'   => round($lineTotal, 2),
+                'review'       => $reviewMap[(int) $item['product_id']] ?? null,
             ];
         }
 
         return [
-            'order_id'    => $orderId,
-            'status'      => $order['status'],
-            'created_at'  => $order['order_date'] ?? null,
-            'buyer'       => [
+            'order_id'        => $orderId,
+            'status'          => $order['status'],
+            'delivery_method' => $order['delivery_method'] ?? 'delivery',
+            'delivery_fee'    => (float) ($order['delivery_fee'] ?? 0),
+            'created_at'      => $order['order_date'] ?? null,
+            'buyer'           => [
                 'full_name' => $buyer['full_name'] ?? null,
                 'phone'     => $buyer['phone'] ?? null,
             ],
-            'items'       => $lines,
-            'subtotal'    => round($subtotal, 2),
-            'payment'     => $payment ? [
+            'items'           => $lines,
+            'subtotal'        => round($subtotal, 2),
+            'payment'         => $payment ? [
                 'status'    => $payment['payment_status'],
                 'method'    => $payment['payment_method'] ?? null,
                 'reference' => $payment['transaction_reference'] ?? null,
                 'paid_at'   => $payment['paid_at'] ?? null,
             ] : null,
-            'delivery'    => $delivery ? [
+            'delivery'        => $delivery ? [
                 'status'           => $delivery['delivery_status'],
                 'address'          => $delivery['delivery_address'] ?? null,
                 'latitude'         => $delivery['latitude'] ?? null,
@@ -147,8 +161,9 @@ class ApiFarmerOrders extends Controller
                 'dispatched_at'    => isset($delivery['dispatched_at']) ? (int) $delivery['dispatched_at'] : null,
                 'origin_latitude'  => $delivery['origin_latitude'] ?? null,
                 'origin_longitude' => $delivery['origin_longitude'] ?? null,
+                'eta_seconds'      => isset($delivery['eta_seconds']) ? (int) $delivery['eta_seconds'] : null,
             ] : null,
-            'next_status' => self::NEXT_STATUS[$order['status']] ?? null,
+            'next_status'     => self::NEXT_STATUS[$order['status']] ?? null,
         ];
     }
 
@@ -178,11 +193,15 @@ class ApiFarmerOrders extends Controller
             'order_id'
         );
 
-        // 4. Buyers, payments, at deliveries ng mga order na iyon
+        // 4. Buyers, payments, deliveries, at reviews ng mga order na iyon
         $buyerIds   = array_map(fn ($o) => $o['buyer_id'], $orders);
         $buyers     = api_key_by(api_fetch_in($this->db, 'users', 'user_id', $buyerIds), 'user_id');
         $payments   = api_key_by(api_fetch_in($this->db, 'payments', 'order_id', $orderIds), 'order_id');
         $deliveries = api_key_by(api_fetch_in($this->db, 'deliveries', 'order_id', $orderIds), 'order_id');
+        $reviewsByOrder = api_group_by(
+            api_fetch_in($this->db, 'reviews', 'order_id', $orderIds),
+            'order_id'
+        );
 
         $result = [];
         foreach ($itemsByOrder as $orderId => $items) {
@@ -195,7 +214,8 @@ class ApiFarmerOrders extends Controller
                 $products,
                 $buyers,
                 $payments,
-                $deliveries
+                $deliveries,
+                $reviewsByOrder
             );
         }
 
@@ -209,7 +229,9 @@ class ApiFarmerOrders extends Controller
     /**
      * POST /api/farmer/orders/status
      * Body: order_id, status (dapat ang susunod na status lang)
-     * Kapag out_for_delivery, itatala ang oras ng pag-alis at lokasyon ng farmer.
+     * Kapag out_for_delivery sa delivery, itatala ang oras ng pag-alis, lokasyon ng farmer,
+     * at ang napiling oras ng biyahe (eta_minutes, default 2 minuto).
+     * Sa pickup, walang rider: "Handa na kunin" lang ang status.
      */
     public function updateStatus()
     {
@@ -257,17 +279,23 @@ class ApiFarmerOrders extends Controller
         // Ang enum ng deliveries ay gumagamit ng "delivered" imbes na "completed"
         $deliveryStatus = $newStatus === 'completed' ? 'delivered' : $newStatus;
 
+        $isPickup = ($order['delivery_method'] ?? 'delivery') === 'pickup';
+
         $deliveryRows = $this->delivery->_find_all_by('order_id', $orderId) ?: [];
         if (!empty($deliveryRows)) {
             $delivery = (array) $deliveryRows[0];
             $update = ['delivery_status' => $deliveryStatus];
 
-            // Kapag ipinadala na, itatala ang oras ng pag-alis at ang lokasyon ng farmer
-            if ($newStatus === 'out_for_delivery') {
+            // Sa delivery lang: itatala ang oras ng pag-alis, lokasyon ng farmer,
+            // at ang napiling oras ng biyahe. Limitado sa 0.5 hanggang 120 minuto.
+            if ($newStatus === 'out_for_delivery' && !$isPickup) {
                 [$originLat, $originLng] = $this->farmerOrigin($farmerId);
+                $etaMinutes = max(0.5, min(120, (float) ($body['eta_minutes'] ?? 2)));
+
                 $update['dispatched_at']    = time();
                 $update['origin_latitude']  = $originLat;
                 $update['origin_longitude'] = $originLng;
+                $update['eta_seconds']      = (int) round($etaMinutes * 60);
             }
 
             $this->delivery->_update((int) $delivery['delivery_id'], $update);

@@ -9,7 +9,7 @@ defined('PREVENT_DIRECT_ACCESS') OR exit('No direct script access allowed');
 class Delivery extends Model {
 protected $table = 'deliveries';
 protected $primary_key = 'delivery_id';
-protected $fillable = ['order_id', 'delivery_status', 'delivery_address', 'latitude', 'longitude', 'dispatched_at', 'origin_latitude', 'origin_longitude'];
+protected $fillable = ['order_id', 'delivery_status', 'delivery_address', 'latitude', 'longitude', 'dispatched_at', 'origin_latitude', 'origin_longitude', 'eta_seconds'];
 protected $guarded = ['delivery_id'];
 
     public function __construct()

@@ -3,6 +3,10 @@ defined('PREVENT_DIRECT_ACCESS') OR exit('No direct script access allowed');
 
 class ApiOrders extends Controller
 {
+    // Delivery fee: base kada farmer, plus bayad kada kilometro
+    private const DELIVERY_BASE_FEE = 30.0;
+    private const DELIVERY_PER_KM   = 10.0;
+
     public function __construct()
     {
         parent::__construct();
@@ -61,6 +65,47 @@ class ApiOrders extends Controller
     }
 
     /**
+     * Distansya sa kilometro ng dalawang coordinates (haversine formula).
+     */
+    private function distanceKm($lat1, $lng1, $lat2, $lng2)
+    {
+        $earthRadius = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+
+        $a = sin($dLat / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return $earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
+    /**
+     * Delivery fee: base bawat farmer, plus bayad kada km mula sa farmer papunta sa buyer.
+     * Kung walang address ang farmer, base fee lang ang sisingilin.
+     */
+    private function calculateDeliveryFee(array $farmerIds, $buyerLat, $buyerLng)
+    {
+        $fee = 0.0;
+
+        foreach ($farmerIds as $farmerId) {
+            $fee += self::DELIVERY_BASE_FEE;
+
+            $rows = $this->db->table('users')->where('user_id', $farmerId)->get_all() ?: [];
+            $farmer = !empty($rows) ? (array) $rows[0] : [];
+            [$farmerLat, $farmerLng] = $this->geocodeAddress($farmer['address'] ?? '');
+
+            if ($farmerLat === null || $buyerLat === null) {
+                continue;
+            }
+
+            $fee += self::DELIVERY_PER_KM
+                * $this->distanceKm($farmerLat, $farmerLng, $buyerLat, $buyerLng);
+        }
+
+        return round($fee, 2);
+    }
+
+    /**
      * GET /api/geocode?q=address
      * Ginagamit ng Cart para mag-auto-pin habang nagta-type ang buyer.
      */
@@ -95,11 +140,11 @@ class ApiOrders extends Controller
         $orders = array_map(fn ($o) => (array) $o, $this->order->_find_all_by('buyer_id', $buyerId) ?: []);
         $orderIds = array_map(fn ($o) => (int) $o['order_id'], $orders);
 
-        // 2. Items kasama ang pangalan ng produkto, sa isang JOIN query
+        // 2. Items kasama ang product_id at pangalan ng produkto, sa isang JOIN query
         $itemRows = [];
         if (!empty($orderIds)) {
             $itemRows = $this->db->table('order_items')
-                ->select('order_items.order_item_id, order_items.order_id, order_items.quantity, order_items.unit_price, order_items.subtotal, products.product_name')
+                ->select('order_items.order_item_id, order_items.order_id, order_items.product_id, order_items.quantity, order_items.unit_price, order_items.subtotal, products.product_name')
                 ->join('products', 'products.product_id = order_items.product_id')
                 ->in('order_items.order_id', $orderIds)
                 ->get_all() ?: [];
@@ -118,6 +163,7 @@ class ApiOrders extends Controller
             foreach ($itemsByOrder[$orderId] ?? [] as $item) {
                 $detailedItems[] = [
                     'order_item_id' => (int) $item['order_item_id'],
+                    'product_id'    => (int) $item['product_id'],
                     'product_name'  => $item['product_name'] ?? '',
                     'quantity'      => (int) $item['quantity'],
                     'unit_price'    => (float) $item['unit_price'],
@@ -125,9 +171,10 @@ class ApiOrders extends Controller
                 ];
             }
 
-            $order['items']    = $detailedItems;
-            $order['payment']  = $payments[$orderId] ?? null;
-            $order['delivery'] = $deliveries[$orderId] ?? null;
+            $order['items']        = $detailedItems;
+            $order['delivery_fee'] = (float) ($order['delivery_fee'] ?? 0);
+            $order['payment']      = $payments[$orderId] ?? null;
+            $order['delivery']     = $deliveries[$orderId] ?? null;
             $result[] = $order;
         }
 
@@ -139,7 +186,7 @@ class ApiOrders extends Controller
     /**
      * POST /api/orders
      * Body: items [{product_id, quantity}], delivery_address, notes,
-     *       latitude/longitude (optional, galing sa pin ng mapa)
+     *       delivery_method (delivery o pickup), latitude/longitude (optional, galing sa pin ng mapa)
      * Binabawasan ang stock sa loob ng transaction, kaya hindi nagkakahalo ang stock kapag sabay ang order.
      */
     public function store()
@@ -151,6 +198,11 @@ class ApiOrders extends Controller
         $items   = $body['items'] ?? [];
         $address = trim($body['delivery_address'] ?? '');
         $notes   = trim($body['notes'] ?? '');
+        $method  = $body['delivery_method'] ?? 'delivery';
+
+        if (!in_array($method, ['delivery', 'pickup'], true)) {
+            $this->api->respond_error('Mali ang paraan ng delivery.', 422);
+        }
 
         $hasLat = isset($body['latitude']) && $body['latitude'] !== '' && $body['latitude'] !== null;
         $hasLng = isset($body['longitude']) && $body['longitude'] !== '' && $body['longitude'] !== null;
@@ -188,7 +240,7 @@ class ApiOrders extends Controller
 
         // Pre-check: validation at presyo bago ang transaction
         $lines = [];
-        $total = 0.0;
+        $subtotal = 0.0;
 
         foreach ($quantities as $productId => $quantity) {
             $product = $this->product->_find($productId);
@@ -205,19 +257,20 @@ class ApiOrders extends Controller
             }
 
             $unitPrice = (float) $product['price'];
-            $subtotal  = round($unitPrice * $quantity, 2);
-            $total    += $subtotal;
+            $lineTotal = round($unitPrice * $quantity, 2);
+            $subtotal += $lineTotal;
 
             $lines[] = [
                 'product_id'   => $productId,
+                'farmer_id'    => (int) $product['farmer_id'],
                 'product_name' => $product['product_name'],
                 'quantity'     => $quantity,
                 'unit_price'   => $unitPrice,
-                'subtotal'     => $subtotal,
+                'subtotal'     => $lineTotal,
             ];
         }
 
-        $total = round($total, 2);
+        $subtotal = round($subtotal, 2);
 
         // Geocode bago ang transaction para hindi naka-hold ang transaction habang naghihintay sa Nominatim
         if ($pinLat !== null) {
@@ -226,6 +279,13 @@ class ApiOrders extends Controller
         } else {
             [$lat, $lng] = $this->geocodeAddress($address);
         }
+
+        // Delivery fee: wala kapag pickup. Idinadagdag sa total.
+        $deliveryFee = $method === 'delivery'
+            ? $this->calculateDeliveryFee(array_values(array_unique(array_column($lines, 'farmer_id'))), $lat, $lng)
+            : 0.0;
+
+        $total = round($subtotal + $deliveryFee, 2);
 
         // Transaction: stock decrement + order + order_items + delivery, lahat o wala
         $this->db->transaction();
@@ -253,6 +313,8 @@ class ApiOrders extends Controller
                 'total_amount'     => $total,
                 'status'           => 'pending',
                 'delivery_address' => $address,
+                'delivery_method'  => $method,
+                'delivery_fee'     => $deliveryFee,
                 'notes'            => $notes !== '' ? $notes : null,
             ]);
 
@@ -284,9 +346,12 @@ class ApiOrders extends Controller
         }
 
         $this->api->respond([
-            'message'      => 'Na-create ang order.',
-            'order_id'     => (int) $orderId,
-            'total_amount' => $total,
+            'message'         => 'Na-create ang order.',
+            'order_id'        => (int) $orderId,
+            'subtotal'        => $subtotal,
+            'delivery_method' => $method,
+            'delivery_fee'    => $deliveryFee,
+            'total_amount'    => $total,
         ]);
     }
 
