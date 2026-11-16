@@ -1,4 +1,9 @@
 <?php
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
 define('PREVENT_DIRECT_ACCESS', TRUE);
 /**
  * ------------------------------------------------------------------
