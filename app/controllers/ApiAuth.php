@@ -155,6 +155,7 @@ class ApiAuth extends Controller
     /**
      * I-verify ang Google ID token sa server ng Google.
      * Nangangailangan ng gumaganang CA bundle sa PHP cURL.
+     * Walang curl_close() dito: deprecated na sa PHP 8.5 at sumisira ng JSON response.
      */
     private function verifyGoogleIdToken($idToken)
     {
@@ -173,7 +174,6 @@ class ApiAuth extends Controller
         if ($raw === false) {
             error_log('Google tokeninfo cURL error: ' . curl_error($ch));
         }
-        curl_close($ch);
 
         if ($raw === false || $status !== 200) {
             return null;
