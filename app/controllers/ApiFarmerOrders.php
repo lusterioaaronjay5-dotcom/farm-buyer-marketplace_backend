@@ -47,8 +47,8 @@ class ApiFarmerOrders extends Controller
             CURLOPT_HTTPHEADER     => ['Accept: application/json'],
         ]);
         $response = curl_exec($ch);
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $status   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        // Walang curl_close() dito: deprecated na sa PHP 8.5 at sumisira ng JSON response
 
         if ($response === false || $status !== 200) {
             return [null, null];
@@ -274,13 +274,11 @@ class ApiFarmerOrders extends Controller
             $this->api->respond_error("Ang susunod na status ay '$expected'.", 422);
         }
 
-        $this->order->_update($orderId, ['status' => $newStatus]);
-
         // Ang enum ng deliveries ay gumagamit ng "delivered" imbes na "completed"
         $deliveryStatus = $newStatus === 'completed' ? 'delivered' : $newStatus;
-
         $isPickup = ($order['delivery_method'] ?? 'delivery') === 'pickup';
 
+        // Delivery muna, tapos order. Kapag pumalya ang delivery, hindi magbabago ang order.
         $deliveryRows = $this->delivery->_find_all_by('order_id', $orderId) ?: [];
         if (!empty($deliveryRows)) {
             $delivery = (array) $deliveryRows[0];
@@ -290,6 +288,9 @@ class ApiFarmerOrders extends Controller
             // at ang napiling oras ng biyahe. Limitado sa 0.5 hanggang 120 minuto.
             if ($newStatus === 'out_for_delivery' && !$isPickup) {
                 [$originLat, $originLng] = $this->farmerOrigin($farmerId);
+                if ($originLat === null) {
+                    error_log("[dispatch] Hindi na-geocode ang address ng farmer $farmerId");
+                }
                 $etaMinutes = max(0.5, min(120, (float) ($body['eta_minutes'] ?? 2)));
 
                 $update['dispatched_at']    = time();
@@ -298,8 +299,13 @@ class ApiFarmerOrders extends Controller
                 $update['eta_seconds']      = (int) round($etaMinutes * 60);
             }
 
-            $this->delivery->_update((int) $delivery['delivery_id'], $update);
+            $ok = $this->delivery->_update((int) $delivery['delivery_id'], $update);
+            if ($ok === false) {
+                $this->api->respond_error('Hindi na-update ang delivery. Subukan ulit.', 500);
+            }
         }
+
+        $this->order->_update($orderId, ['status' => $newStatus]);
 
         $this->api->respond([
             'message'  => 'Status updated.',
